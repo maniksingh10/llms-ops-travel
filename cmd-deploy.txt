@@ -1,0 +1,123 @@
+# Add Docker's official GPG key:
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+# Add the repository to Apt sources:
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+---------------------------------------------------------------------------
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+----------------------------------------------------------------------------
+sudo groupadd docker
+sudo usermod -aG docker $USER
+newgrp docker
+sudo systemctl enable docker.service
+sudo systemctl enable containerd.service
+---------------------------------------------------------------------------------
+curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+minikube start
+----------------------------------------------------------------------------------
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo snap install kubectl --classic
+kubectl version --client
+----------------------------------------------------------------------------------
+git clone
+git config --global user.email "maniksingh10@gmail.com"
+git config --global user.name "maniksingh10"
+git add .
+git commit -m "from-vm"
+git push origin main
+git pull origin main
+-------------------------------------------------------------------------
+Firewall rule
+-------------------------------------------------------------------------
+eval $(minikube docker-env)
+
+docker build -t llmops-app:latest .
+
+kubectl create secret generic llmops-secrets \
+  --from-literal=GROQ_API_KEY="" \
+  --from-literal=HUGGINGFACEHUB_API_TOKEN=""
+
+kubectl apply -f llmops-k8s.yaml
+
+kubectl get podsv
+
+kubectl port-forward svc/llmops-service 8501:80 --address 0.0.0.0
+-------------------------------------------------------------------------
+
+ELK
+
+kubectl create namespace logging
+
+Step 2: Deploy Elasticsearch
+kubectl apply -f elasticsearch.yaml
+➡️ Applies your Elasticsearch deployment configuration.
+
+kubectl get pods -n logging
+➡️ Checks if Elasticsearch pods are up and running.
+
+kubectl get pvc -n logging
+➡️ Checks PersistentVolumeClaims — these should be in Bound state (storage is allocated).
+
+kubectl get pv -n logging
+➡️ Checks PersistentVolumes — these too should show Bound to confirm the storage is working.
+
+✅ Elasticsearch setup done...
+
+-------------------------------------------------------------------------
+🌐 Step 3: Deploy Kibana
+kubectl apply -f kibana.yaml
+➡️ Deploys Kibana, the frontend for Elasticsearch.
+
+kubectl get pods -n logging
+➡️ Wait until the Kibana pod is in Running state (might take a few minutes).
+
+kubectl port-forward -n logging svc/kibana 5601:5601 --address 0.0.0.0
+➡️ This makes Kibana accessible at http://<your-ip>:5601.
+
+✅ Kibana setup done...
+-------------------------------------------------------------------------
+🔄 Step 4: Deploy Logstash
+kubectl apply -f logstash.yaml
+➡️ Deploys Logstash to process and forward logs.
+
+kubectl get pods -n logging
+➡️ Ensure Logstash is running.
+
+✅ Logstash setup done...
+-------------------------------------------------------------------------
+📤 Step 5: Deploy Filebeat
+kubectl apply -f filebeat.yaml
+➡️ Deploys Filebeat to collect logs from all pods/nodes and send to Logstash.
+
+kubectl get all -n logging
+➡️ Checks all resources (pods, services, etc.) to confirm everything is running.
+
+✅ Filebeat setup done...
+-------------------------------------------------------------------------
+Step 6: Setup Index Patterns in Kibana
+Open Kibana in browser → http://<your-ip>:5601
+Click "Explore on my own"
+Go to Stack Management from the left panel
+Click Index Patterns
+Create new index pattern:
+    Pattern name: filebeat-*
+    Timestamp field: @timestamp
+Click Create Index Pattern
+➡️ This tells Kibana how to search and filter logs coming from Filebeat.
+-------------------------------------------------------------------------
+🔍 Step 7: Explore Logs
+In the left panel, click "Analytics → Discover"
+You will see logs collected from Kubernetes cluster!
+Use filters like:
+    kubernetes.container.name to filter logs from specific pods like Filebeat, Kibana, Logstash, etc.
+✅ Done! Now you can monitor and analyze your K8s logs using ELK + Filebeat. 🎉
+
+
